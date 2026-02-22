@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Log in</title>
+<style>
+  body {
+    font-family: system-ui;
+    margin: 16px;
+    max-width: 720px;
+    background-color: #000;
+    color: #8fd3ff;  /* light blue */
+  }
+
+  h2, h3 {
+    color: #8fd3ff;
+  }
+
+  input, button {
+    font-size: 18px;
+    padding: 10px;
+    background-color: #111;
+    color: #8fd3ff;
+    border: 1px solid #8fd3ff;
+  }
+
+  button:hover {
+    background-color: #8fd3ff;
+    color: #000;
+    cursor: pointer;
+  }
+
+  .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  #total {
+    font-weight: 800;
+    margin-top: 14px;
+  }
+
+  ul {
+    padding-left: 18px;
+  }
+
+  a {
+    color: #8fd3ff;
+  }
+</style>
+
+</head>
+<body>
+  <h2>Choose a username</h2>
+
+  <form method="POST" class="row">
+    <input name="username" autocomplete="username" placeholder="e.g., john" required>
+    <button type="submit">Continue</button>
+  </form>
+
+  {% if error %}
+    <div class="err">{{ error }}</div>
+  {% endif %}
+
+  <p style="margin-top:14px; font-size: 14px;">
+    (No password yet. This is fine for trusted users; we can add real auth later.)
+  </p>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Float Logger</title>
+<style>
+  body {
+    font-family: system-ui;
+    margin: 16px;
+    max-width: 720px;
+    background-color: #000;
+    color: #8fd3ff;  /* light blue */
+  }
+
+  h2, h3 {
+    color: #8fd3ff;
+  }
+
+  input, button {
+    font-size: 18px;
+    padding: 10px;
+    background-color: #111;
+    color: #8fd3ff;
+    border: 1px solid #8fd3ff;
+  }
+
+  button:hover {
+    background-color: #8fd3ff;
+    color: #000;
+    cursor: pointer;
+  }
+
+  .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  #total {
+    font-weight: 800;
+    margin-top: 14px;
+  }
+
+  ul {
+    padding-left: 18px;
+  }
+
+  a {
+    color: #8fd3ff;
+  }
+
+  #listWrap {
+  margin-top: 8px;
+  border: 1px solid #8fd3ff;
+  background: #000;
+  max-height: 360px;     /* adjust */
+  overflow-y: auto;
+  padding: 10px;
+}
+
+#list {
+  margin: 0;
+}
+
+
+</style>
+
+</head>
+<body>
+
+<form method="POST" action="/logout">
+  <button type="submit">Log out</button>
+</form>
+
+
+  <h2 id="title">Mileage Tracker</h2>
+
+<div class="row">
+  <input type="date" id="date">
+  <input id="value" inputmode="decimal" placeholder="Enter a number">
+  <button id="add">Add</button>
+</div>
+
+  <div id="total">Total: 0.00</div>
+
+  <label style="display:block; margin-top:10px;">
+  <input type="checkbox" id="oldestFirst">
+  Oldest first
+</label>
+
+<h3>Entries</h3>
+<div id="listWrap">
+  <ul id="list"></ul>
+</div>
+
+<script>
+  const valueEl = document.getElementById("value");
+  const dateEl  = document.getElementById("date");
+  const totalEl = document.getElementById("total");
+  const listEl  = document.getElementById("list");
+  const titleEl = document.getElementById("title"); // if you added id="title"
+  const oldestFirstEl = document.getElementById("oldestFirst");
+
+  if (oldestFirstEl) {
+    oldestFirstEl.addEventListener("change", refresh);
+  }
+
+  function fmt2(x) { return Number(x).toFixed(2); }
+
+  async function refresh() {
+    const oldest = oldestFirstEl && oldestFirstEl.checked ? "1" : "0";
+  const res = await fetch(`/api/entries?oldest=${oldest}`);
+  const data = await res.json();
+
+
+    if (titleEl && data.username) {
+      titleEl.textContent = "Mileage Tracker for " + data.username;
+    }
+
+    totalEl.textContent = "Total: " + fmt2(data.total);
+
+    listEl.replaceChildren();
+    const frag = document.createDocumentFragment();
+
+    for (const e of data.entries) {
+      const li = document.createElement("li");
+      li.textContent = `${e.date} — ${fmt2(e.value)}`;
+      frag.appendChild(li);
+    }
+
+    listEl.appendChild(frag);
+  }
+
+  document.getElementById("add").onclick = async () => {
+    const rawValue = valueEl.value.trim();
+    const rawDate = dateEl.value;
+
+    if (!rawValue || !rawDate) {
+      alert("Please enter both date and value");
+      return;
+    }
+
+    const num = Number(rawValue);
+    if (!Number.isFinite(num)) {
+      alert("Invalid number");
+      return;
+    }
+
+    const resp = await fetch("/api/entries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: num, date: rawDate })
+    });
+
+    if (!resp.ok) {
+      const t = await resp.text();
+      alert("Save failed: " + t);
+      return;
+    }
+
+    valueEl.value = "";
+    await refresh();
+  };
+
+  // default date to today
+  dateEl.value = new Date().toISOString().slice(0, 10);
+
+  refresh();
+</script>
+
+
+</body>
+</html>
