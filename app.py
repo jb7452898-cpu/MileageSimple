@@ -136,11 +136,10 @@ def login_post():
     return redirect(url_for("home"))
 
 
-@app.post("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
     return redirect(url_for("login"))
-
 
 @app.get("/")
 @require_login
