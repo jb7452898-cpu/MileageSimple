@@ -64,6 +64,36 @@
   margin: 0;
 }
 
+#list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+#list li button {
+  font-size: 14px;
+  padding: 6px 10px;
+}
+
+.entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.entry.removing {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.entry .actions {
+  display: flex;
+  gap: 8px;
+}
 
 </style>
 
@@ -109,6 +139,8 @@
 
   function fmt2(x) { return Number(x).toFixed(2); }
 
+  /////// async function refresh
+
   async function refresh() {
     const oldest = oldestFirstEl && oldestFirstEl.checked ? "1" : "0";
   const res = await fetch(`/api/entries?oldest=${oldest}`);
@@ -126,12 +158,63 @@
 
     for (const e of data.entries) {
       const li = document.createElement("li");
-      li.textContent = `${e.date} — ${fmt2(e.value)}`;
+      li.className = "entry";
+
+      const span = document.createElement("span");
+      span.textContent = `${e.date} — ${fmt2(e.value)}`;
+
+      const actions = document.createElement("span");
+      actions.className = "actions";
+
+      const delBtn = document.createElement("button");
+      delBtn.textContent = "Delete";
+
+      delBtn.onclick = () => {
+        // swap buttons inline (no browser confirm popup)
+        actions.replaceChildren();
+
+        const confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Confirm";
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+
+        cancelBtn.onclick = () => {
+          actions.replaceChildren(delBtn);
+        };
+
+        confirmBtn.onclick = async () => {
+          // animate out immediately
+          li.classList.add("removing");
+
+          const resp = await fetch(`/api/entries/${e.id}`, { method: "DELETE" });
+          if (!resp.ok) {
+            li.classList.remove("removing");
+            const t = await resp.text();
+            alert("Delete failed: " + t);
+            actions.replaceChildren(delBtn);
+            return;
+          }
+
+          // wait for fade-out, then refresh list/total
+          setTimeout(refresh, 200);
+        };
+
+        actions.appendChild(confirmBtn);
+        actions.appendChild(cancelBtn);
+      };
+
+      actions.appendChild(delBtn);
+
+      li.appendChild(span);
+      li.appendChild(actions);
       frag.appendChild(li);
     }
 
     listEl.appendChild(frag);
   }
+
+    /////// end refresh block
 
   document.getElementById("add").onclick = async () => {
     const rawValue = valueEl.value.trim();

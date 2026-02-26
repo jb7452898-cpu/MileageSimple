@@ -25,7 +25,7 @@ def normalize_username(raw: str) -> str:
     # You can adjust to your taste (e.g. allow caps).
     name = raw.strip()
     name = re.sub(r"\s+", " ", name)
-    return name.lower()
+    return name.lower()  # i might change this to name.title()
 
 
 def init_db():
@@ -216,6 +216,32 @@ def add_entry():
             con.commit()
 
     return jsonify({"ok": True})
+
+@app.delete("/api/entries/<int:entry_id>")
+@require_login
+def delete_entry(entry_id: int):
+    user_id = int(session["user_id"])
+
+    if using_postgres():
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM entries WHERE id=%s AND user_id=%s",
+                    (entry_id, user_id),
+                )
+                deleted = cur.rowcount
+            conn.commit()
+    else:
+        with sqlite3.connect(SQLITE_PATH) as con:
+            con.execute("PRAGMA foreign_keys = ON;")
+            cur = con.execute(
+                "DELETE FROM entries WHERE id=? AND user_id=?",
+                (entry_id, user_id),
+            )
+            deleted = cur.rowcount
+            con.commit()
+
+    return jsonify({"ok": True, "deleted": deleted})
 
 
 if __name__ == "__main__":
