@@ -46,6 +46,7 @@ def init_db():
                         value DOUBLE PRECISION NOT NULL
                     )
                 """)
+                cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT")
             conn.commit()
     else:
         with sqlite3.connect(SQLITE_PATH) as con:
@@ -67,6 +68,10 @@ def init_db():
                     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             """)
+            try:
+                con.execute("ALTER TABLE users ADD COLUMN pin_hash TEXT;")
+            except sqlite3.OperationalError:
+                pass
             con.commit()
 
 
