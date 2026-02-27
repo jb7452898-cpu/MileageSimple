@@ -4,60 +4,74 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Log in</title>
-<style>
-  body {
-    font-family: system-ui;
-    margin: 16px;
-    max-width: 720px;
-    background-color: #000;
-    color: #8fd3ff;  /* light blue */
-  }
+  <style>
+    body {
+      font-family: system-ui;
+      margin: 16px;
+      max-width: 720px;
+      background-color: #000;
+      color: #8fd3ff;  /* light blue */
+    }
 
-  h2, h3 {
-    color: #8fd3ff;
-  }
+    h2, h3 { color: #8fd3ff; }
 
-  input, button {
-    font-size: 18px;
-    padding: 10px;
-    background-color: #111;
-    color: #8fd3ff;
-    border: 1px solid #8fd3ff;
-  }
+    input, button {
+      font-size: 18px;
+      padding: 10px;
+      background-color: #111;
+      color: #8fd3ff;
+      border: 1px solid #8fd3ff;
+    }
 
-  button:hover {
-    background-color: #8fd3ff;
-    color: #000;
-    cursor: pointer;
-  }
+    button:hover {
+      background-color: #8fd3ff;
+      color: #000;
+      cursor: pointer;
+    }
 
-  .row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
 
-  #total {
-    font-weight: 800;
-    margin-top: 14px;
-  }
+    .err {
+      margin-top: 12px;
+      color: #ff7aa2;
+      font-weight: 700;
+    }
 
-  ul {
-    padding-left: 18px;
-  }
-
-  a {
-    color: #8fd3ff;
-  }
-</style>
-
+    .hint {
+      margin-top: 14px;
+      font-size: 14px;
+      opacity: 0.9;
+      max-width: 60ch;
+    }
+  </style>
 </head>
+
 <body>
-  <h2>Choose a username</h2>
+  <h2>Log in</h2>
 
   <form method="POST" class="row">
-    <input name="username" autocomplete="username" placeholder="e.g., john" required>
+    <input
+      name="username"
+      autocomplete="username"
+      placeholder="Username"
+      required
+    >
+
+    <input
+      name="pin"
+      type="password"
+      inputmode="numeric"
+      autocomplete="current-password"
+      placeholder="PIN (4+ digits)"
+      minlength="4"
+      required
+    >
+
     <button type="submit">Continue</button>
   </form>
 
@@ -65,8 +79,8 @@
     <div class="err">{{ error }}</div>
   {% endif %}
 
-  <p style="margin-top:14px; font-size: 14px;">
-    (No password yet. This is fine for trusted users; we can add real auth later.)
+  <p class="hint">
+    PIN is required for all users. If this is your first time, you’ll set your PIN now.
   </p>
 </body>
 </html>

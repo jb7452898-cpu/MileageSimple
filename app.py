@@ -6,6 +6,8 @@ from functools import wraps
 import psycopg
 from flask import Flask, jsonify, render_template, request, redirect, session, url_for
 
+from werkzeug.security import generate_password_hash, check_password_hash
+
 app = Flask(__name__)
 
 # Required for Flask sessions (cookie signing).
@@ -124,22 +126,39 @@ def login():
 
 @app.post("/login")
 def login_post():
-    raw = request.form.get("username", "")
-    username = normalize_username(raw)
+    raw_user = request.form.get("username", "")
+    raw_pin = request.form.get("pin", "")
+
+    username = normalize_username(raw_user)
+    pin = raw_pin.strip()
 
     if not username:
         return render_template("login.html", error="Please enter a username.")
+    if not pin or len(pin) < 4 or not pin.isdigit():
+        return render_template("login.html", error="Please enter a numeric PIN (at least 4 digits).")
 
-    # Create or fetch user
-    user_id = get_or_create_user_id(username)
+    row = get_user_by_username(username)
 
-    # Remember user in a cookie-backed session
+    if row is None:
+        # New user: create with PIN
+        pin_hash = generate_password_hash(pin)
+        user_id = create_user(username, pin_hash)
+    else:
+        user_id, pin_hash = int(row[0]), row[1]
+
+        # Existing user from pre-PIN days: set PIN now (first login after upgrade)
+        if not pin_hash:
+            pin_hash = generate_password_hash(pin)
+            set_user_pin(user_id, pin_hash)
+        else:
+            # Normal login: verify PIN
+            if not check_password_hash(pin_hash, pin):
+                return render_template("login.html", error="Incorrect PIN.")
+
     session["user_id"] = user_id
     session["username"] = username
-    session.permanent = True  # makes it persist beyond browser close (configurable)
-
+    session.permanent = True
     return redirect(url_for("home"))
-
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
@@ -247,6 +266,57 @@ def delete_entry(entry_id: int):
             con.commit()
 
     return jsonify({"ok": True, "deleted": deleted})
+
+def get_user_by_username(username: str):
+    if using_postgres():
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, pin_hash FROM users WHERE username=%s", (username,))
+                row = cur.fetchone()
+        return row  # (id, pin_hash) or None
+    else:
+        with sqlite3.connect(SQLITE_PATH) as con:
+            con.execute("PRAGMA foreign_keys = ON;")
+            cur = con.cursor()
+            cur.execute("SELECT id, pin_hash FROM users WHERE username=?", (username,))
+            row = cur.fetchone()
+        return row  # (id, pin_hash) or None
+
+
+def create_user(username: str, pin_hash: str) -> int:
+    if using_postgres():
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users(username, pin_hash) VALUES (%s, %s) RETURNING id",
+                    (username, pin_hash),
+                )
+                new_id = cur.fetchone()[0]
+            conn.commit()
+        return int(new_id)
+    else:
+        with sqlite3.connect(SQLITE_PATH) as con:
+            con.execute("PRAGMA foreign_keys = ON;")
+            cur = con.cursor()
+            cur.execute(
+                "INSERT INTO users(username, pin_hash) VALUES (?, ?)",
+                (username, pin_hash),
+            )
+            con.commit()
+            return int(cur.lastrowid)
+
+
+def set_user_pin(user_id: int, pin_hash: str) -> None:
+    if using_postgres():
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE users SET pin_hash=%s WHERE id=%s", (pin_hash, user_id))
+            conn.commit()
+    else:
+        with sqlite3.connect(SQLITE_PATH) as con:
+            con.execute("PRAGMA foreign_keys = ON;")
+            con.execute("UPDATE users SET pin_hash=? WHERE id=?", (pin_hash, user_id))
+            con.commit()
 
 
 if __name__ == "__main__":
