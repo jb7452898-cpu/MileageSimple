@@ -95,6 +95,56 @@
   gap: 8px;
 }
 
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.stat-card {
+  border: 1px solid #8fd3ff;
+  background: #111;
+  padding: 12px;
+}
+
+.stat-label {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+#chartWrap {
+  margin-top: 16px;
+  border: 1px solid #8fd3ff;
+  background: #111;
+  padding: 10px;
+}
+
+#chartTitle {
+  margin: 0 0 8px 0;
+}
+
+#chart {
+  width: 100%;
+  height: 260px;
+  display: block;
+  background: #000;
+  border: 1px solid #8fd3ff;
+}
+
+.chart-empty {
+  padding: 24px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+
 </style>
 
 </head>
@@ -103,6 +153,8 @@
 <form method="POST" action="/logout">
   <button type="submit">Log out</button>
 </form>
+
+
 
 
   <h2 id="title">Mileage Tracker</h2>
@@ -115,6 +167,30 @@
 
   <div id="total">Total: 0.00</div>
 
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Entries</div>
+    <div class="stat-value" id="statCount">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Highest Entry</div>
+    <div class="stat-value" id="statMax">0.00</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg / Entry</div>
+    <div class="stat-value" id="statAvgEntry">0.00</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg / Day</div>
+    <div class="stat-value" id="statAvgDay">0.00</div>
+  </div>
+</div>
+
+<div id="chartWrap">
+  <h3 id="chartTitle">Mileage Over Time</h3>
+  <svg id="chart" viewBox="0 0 700 260" preserveAspectRatio="none"></svg>
+</div>
+
   <label style="display:block; margin-top:10px;">
   <input type="checkbox" id="oldestFirst">
   Oldest first
@@ -125,6 +201,12 @@
   <ul id="list"></ul>
 </div>
 
+<div class="row" style="margin-top: 10px;">
+  <button type="button" onclick="window.location.href='/download'">
+    Download data (CSV)
+  </button>
+</div>
+
 <script>
   const valueEl = document.getElementById("value");
   const dateEl  = document.getElementById("date");
@@ -132,6 +214,121 @@
   const listEl  = document.getElementById("list");
   const titleEl = document.getElementById("title"); // if you added id="title"
   const oldestFirstEl = document.getElementById("oldestFirst");
+
+  const statCountEl = document.getElementById("statCount");
+  const statMaxEl = document.getElementById("statMax");
+  const statAvgEntryEl = document.getElementById("statAvgEntry");
+  const statAvgDayEl = document.getElementById("statAvgDay");
+  const chartEl = document.getElementById("chart");
+
+    function escapeXml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&apos;");
+  }
+
+  function drawChart(entries) {
+    const width = 700;
+    const height = 260;
+    const padLeft = 52;
+    const padRight = 18;
+    const padTop = 18;
+    const padBottom = 38;
+
+    if (!entries.length) {
+      chartEl.innerHTML = `
+        <text x="350" y="130" text-anchor="middle" fill="#8fd3ff" font-size="16">
+          No data yet
+        </text>
+      `;
+      return;
+    }
+
+    const chronological = [...entries].sort((a, b) => {
+      if (a.date === b.date) return a.id - b.id;
+      return a.date.localeCompare(b.date);
+    });
+
+    const values = chronological.map(e => Number(e.value));
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+
+    const range = maxValue - minValue || 1;
+
+    const xFor = (i) => {
+      if (chronological.length === 1) return (padLeft + width - padRight) / 2;
+      const usable = width - padLeft - padRight;
+      return padLeft + (i / (chronological.length - 1)) * usable;
+    };
+
+    const yFor = (v) => {
+      const usable = height - padTop - padBottom;
+      return padTop + (1 - ((v - minValue) / range)) * usable;
+    };
+
+    const points = chronological.map((e, i) => `${xFor(i)},${yFor(e.value)}`).join(" ");
+
+    const yTicks = 4;
+    let html = "";
+
+    for (let i = 0; i <= yTicks; i++) {
+      const t = i / yTicks;
+      const y = padTop + t * (height - padTop - padBottom);
+      const val = maxValue - t * range;
+
+      html += `
+        <line x1="${padLeft}" y1="${y}" x2="${width - padRight}" y2="${y}"
+              stroke="#24485c" stroke-width="1" />
+        <text x="${padLeft - 8}" y="${y + 4}" text-anchor="end"
+              fill="#8fd3ff" font-size="11">${fmt2(val)}</text>
+      `;
+    }
+
+    html += `
+      <line x1="${padLeft}" y1="${height - padBottom}" x2="${width - padRight}" y2="${height - padBottom}"
+            stroke="#8fd3ff" stroke-width="1.5" />
+      <line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${height - padBottom}"
+            stroke="#8fd3ff" stroke-width="1.5" />
+    `;
+
+    if (chronological.length >= 1) {
+      const first = chronological[0];
+      const last = chronological[chronological.length - 1];
+
+      html += `
+        <text x="${padLeft}" y="${height - 12}" text-anchor="start"
+              fill="#8fd3ff" font-size="11">${escapeXml(first.date)}</text>
+        <text x="${width - padRight}" y="${height - 12}" text-anchor="end"
+              fill="#8fd3ff" font-size="11">${escapeXml(last.date)}</text>
+      `;
+    }
+
+    html += `
+      <polyline
+        fill="none"
+        stroke="#8fd3ff"
+        stroke-width="3"
+        points="${points}"
+      />
+    `;
+
+    for (let i = 0; i < chronological.length; i++) {
+      const e = chronological[i];
+      const x = xFor(i);
+      const y = yFor(e.value);
+
+      html += `
+        <circle cx="${x}" cy="${y}" r="4" fill="#8fd3ff">
+          <title>${escapeXml(e.date)} — ${fmt2(e.value)}</title>
+        </circle>
+      `;
+    }
+
+    chartEl.innerHTML = html;
+  }
 
   if (oldestFirstEl) {
     oldestFirstEl.addEventListener("change", refresh);
@@ -152,6 +349,14 @@
     }
 
     totalEl.textContent = "Total: " + fmt2(data.total);
+
+    const stats = data.stats || {};
+    statCountEl.textContent = stats.count ?? 0;
+    statMaxEl.textContent = fmt2(stats.max_value ?? 0);
+    statAvgEntryEl.textContent = fmt2(stats.avg_per_entry ?? 0);
+    statAvgDayEl.textContent = fmt2(stats.avg_per_day ?? 0);
+
+    drawChart(data.entries || []);
 
     listEl.replaceChildren();
     const frag = document.createDocumentFragment();
@@ -251,6 +456,8 @@
   dateEl.value = new Date().toISOString().slice(0, 10);
 
   refresh();
+
+
 </script>
 
 

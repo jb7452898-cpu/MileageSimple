@@ -4,9 +4,11 @@ import sqlite3
 from functools import wraps
 
 import psycopg
-from flask import Flask, jsonify, render_template, request, redirect, session, url_for
+from flask import Flask, jsonify, render_template, request, redirect, session, url_for, Response
 
 from werkzeug.security import generate_password_hash, check_password_hash
+
+
 
 app = Flask(__name__)
 
@@ -178,7 +180,6 @@ def get_entries():
     oldest = request.args.get("oldest", "0") == "1"
     order_dir = "ASC" if oldest else "DESC"
 
-
     if using_postgres():
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
@@ -188,8 +189,6 @@ def get_entries():
                     f"ORDER BY entry_date {order_dir}, id {order_dir}",
                     (user_id,),
                 )
-
-
                 rows = cur.fetchall()
         entries = [{"id": r[0], "date": r[1].isoformat(), "value": float(r[2])} for r in rows]
     else:
@@ -203,12 +202,28 @@ def get_entries():
                 (user_id,),
             ).fetchall()
 
-
         entries = [{"id": r["id"], "date": r["entry_date"], "value": float(r["value"])} for r in rows]
 
-    total = sum(e["value"] for e in entries)
-    return jsonify({"entries": entries, "total": round(total, 2), "username": session.get("username")})
+    total = round(sum(e["value"] for e in entries), 2)
+    count = len(entries)
+    max_value = round(max((e["value"] for e in entries), default=0), 2)
 
+    unique_days = len({e["date"] for e in entries})
+    avg_per_entry = round(total / count, 2) if count else 0.0
+    avg_per_day = round(total / unique_days, 2) if unique_days else 0.0
+
+    return jsonify({
+        "entries": entries,
+        "total": total,
+        "username": session.get("username"),
+        "stats": {
+            "count": count,
+            "max_value": max_value,
+            "avg_per_entry": avg_per_entry,
+            "avg_per_day": avg_per_day,
+            "unique_days": unique_days
+        }
+    })
 
 @app.post("/api/entries")
 @require_login
@@ -266,6 +281,61 @@ def delete_entry(entry_id: int):
             con.commit()
 
     return jsonify({"ok": True, "deleted": deleted})
+
+
+@app.get("/download")
+@require_login
+def download_entries():
+    user_id = int(session["user_id"])
+    username = session.get("username", "user")
+
+    lines = ["date,value"]
+
+    if using_postgres():
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT entry_date, value
+                    FROM entries
+                    WHERE user_id = %s
+                    ORDER BY entry_date ASC, id ASC
+                    """,
+                    (user_id,),
+                )
+                rows = cur.fetchall()
+
+        for row in rows:
+            lines.append(f"{row[0].isoformat()},{float(row[1]):.2f}")
+    else:
+        with sqlite3.connect(SQLITE_PATH) as con:
+            con.execute("PRAGMA foreign_keys = ON;")
+            cur = con.cursor()
+            cur.execute(
+                """
+                SELECT entry_date, value
+                FROM entries
+                WHERE user_id = ?
+                ORDER BY entry_date ASC, id ASC
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+
+        for row in rows:
+            lines.append(f"{row[0]},{float(row[1]):.2f}")
+
+    csv_data = "\n".join(lines) + "\n"
+    from datetime import datetime
+    filename = f"{username}-mileage-{datetime.now().strftime('%Y-%m-%d')}.csv"
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
 
 def get_user_by_username(username: str):
     if using_postgres():
